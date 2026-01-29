@@ -38,6 +38,12 @@ function setupEventListeners() {
             sendMessage();
         });
     });
+
+    // New Chat button
+    const newChatButton = document.getElementById('newChatButton');
+    if (newChatButton) {
+        newChatButton.addEventListener('click', handleNewChat);
+    }
 }
 
 
@@ -169,6 +175,25 @@ async function createNewSession() {
     currentSessionId = null;
     chatMessages.innerHTML = '';
     addMessage('Welcome to the Course Materials Assistant! I can help you with questions about courses, lessons and specific content. What would you like to know?', 'assistant', null, true);
+}
+
+async function handleNewChat() {
+    // Optionally notify backend to clear old session (fire-and-forget)
+    if (currentSessionId) {
+        try {
+            // Don't await - let it happen in background
+            fetch(`${API_URL}/session/${currentSessionId}`, {
+                method: 'DELETE'
+            }).catch(() => {
+                // Silently ignore errors - session cleanup is not critical
+            });
+        } catch (e) {
+            // Ignore errors
+        }
+    }
+
+    // Reset frontend state (uses existing function)
+    createNewSession();
 }
 
 // Load course statistics

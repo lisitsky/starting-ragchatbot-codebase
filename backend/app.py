@@ -93,6 +93,18 @@ async def get_course_stats():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.delete("/api/session/{session_id}")
+async def delete_session(session_id: str):
+    """Delete/clear a conversation session"""
+    try:
+        rag_system.session_manager.clear_session(session_id)
+        return {"status": "success", "message": f"Session {session_id} cleared"}
+    except Exception as e:
+        # Don't raise HTTP error - session cleanup is not critical
+        # Just log and return success anyway
+        print(f"Error clearing session {session_id}: {e}")
+        return {"status": "success", "message": "Session cleanup attempted"}
+
 @app.on_event("startup")
 async def startup_event():
     """Load initial documents on startup"""
