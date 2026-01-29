@@ -88,29 +88,61 @@ class CourseSearchTool(Tool):
     def _format_results(self, results: SearchResults) -> str:
         """Format search results with course and lesson context"""
         formatted = []
-        sources = []  # Track sources for the UI
-        
+        sources = []  # Track structured sources for the UI
+
+        # Batch lookup: collect unique course-lesson combinations
+        unique_sources = {}
+        for meta in results.metadata:
+            course_title = meta.get('course_title', 'unknown')
+            lesson_num = meta.get('lesson_number')
+            key = (course_title, lesson_num)
+            if key not in unique_sources:
+                unique_sources[key] = None
+
+        # Lookup all links at once (prevents N+1 queries)
+        for (course_title, lesson_num) in unique_sources.keys():
+            if lesson_num is not None:
+                # Try lesson link first
+                url = self.store.get_lesson_link(course_title, lesson_num)
+                if not url:
+                    # Fallback to course link
+                    url = self.store.get_course_link(course_title)
+            else:
+                # No lesson number - use course link
+                url = self.store.get_course_link(course_title)
+            unique_sources[(course_title, lesson_num)] = url
+
+        # Process results with link information
         for doc, meta in zip(results.documents, results.metadata):
             course_title = meta.get('course_title', 'unknown')
             lesson_num = meta.get('lesson_number')
-            
-            # Build context header
+
+            # Build context header for search results
             header = f"[{course_title}"
             if lesson_num is not None:
                 header += f" - Lesson {lesson_num}"
             header += "]"
-            
-            # Track source for the UI
-            source = course_title
+
+            # Build source citation text
+            source_text = course_title
             if lesson_num is not None:
-                source += f" - Lesson {lesson_num}"
-            sources.append(source)
-            
+                source_text += f" - Lesson {lesson_num}"
+
+            # Get URL from batch lookup
+            url = unique_sources.get((course_title, lesson_num))
+
+            # Create structured source (dict format)
+            source_citation = {
+                "text": source_text,
+                "url": url
+            }
+            sources.append(source_citation)
+
             formatted.append(f"{header}\n{doc}")
-        
-        # Store sources for retrieval
+
+        # Store structured sources for retrieval
         self.last_sources = sources
-        
+
         return "\n\n".join(formatted)
 
 class ToolManager:

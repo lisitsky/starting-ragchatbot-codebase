@@ -115,25 +115,44 @@ function addMessage(content, type, sources = null, isWelcome = false) {
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${type}${isWelcome ? ' welcome-message' : ''}`;
     messageDiv.id = `message-${messageId}`;
-    
+
     // Convert markdown to HTML for assistant messages
     const displayContent = type === 'assistant' ? marked.parse(content) : escapeHtml(content);
-    
+
     let html = `<div class="message-content">${displayContent}</div>`;
-    
+
     if (sources && sources.length > 0) {
+        // Format sources as clickable links (embedded invisibly)
+        const formattedSources = sources.map(source => {
+            // Backward compatibility: handle old string format
+            if (typeof source === 'string') {
+                return `<div class="source-item">${escapeHtml(source)}</div>`;
+            }
+
+            // New object format with URL
+            const text = escapeHtml(source.text);
+
+            if (source.url) {
+                // Clickable link - URL embedded in href (invisible)
+                return `<div class="source-item"><a href="${escapeHtml(source.url)}" target="_blank" rel="noopener noreferrer" class="source-link">${text}</a></div>`;
+            } else {
+                // No URL - plain text
+                return `<div class="source-item">${text}</div>`;
+            }
+        }).join('');
+
         html += `
             <details class="sources-collapsible">
                 <summary class="sources-header">Sources</summary>
-                <div class="sources-content">${sources.join(', ')}</div>
+                <div class="sources-content">${formattedSources}</div>
             </details>
         `;
     }
-    
+
     messageDiv.innerHTML = html;
     chatMessages.appendChild(messageDiv);
     chatMessages.scrollTop = chatMessages.scrollHeight;
-    
+
     return messageId;
 }
 

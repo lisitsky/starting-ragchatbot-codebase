@@ -11,6 +11,7 @@ import os
 
 from config import config
 from rag_system import RAGSystem
+from models import SourceCitation
 
 # Initialize FastAPI app
 app = FastAPI(title="Course Materials RAG System", root_path="")
@@ -43,7 +44,7 @@ class QueryRequest(BaseModel):
 class QueryResponse(BaseModel):
     """Response model for course queries"""
     answer: str
-    sources: List[str]
+    sources: List[SourceCitation]
     session_id: str
 
 class CourseStats(BaseModel):
@@ -61,13 +62,20 @@ async def query_documents(request: QueryRequest):
         session_id = request.session_id
         if not session_id:
             session_id = rag_system.session_manager.create_session()
-        
+
         # Process query using RAG system
         answer, sources = rag_system.query(request.query, session_id)
-        
+
+        # Convert source dicts to SourceCitation objects
+        source_citations = [
+            SourceCitation(**source) if isinstance(source, dict)
+            else SourceCitation(text=source, url=None)
+            for source in sources
+        ]
+
         return QueryResponse(
             answer=answer,
-            sources=sources,
+            sources=source_citations,
             session_id=session_id
         )
     except Exception as e:
@@ -115,5 +123,5 @@ class DevStaticFiles(StaticFiles):
         return response
     
     
-# Serve static files for the frontend
-app.mount("/", StaticFiles(directory="../frontend", html=True), name="static")
+# Serve static files for the frontend with no-cache headers for development
+app.mount("/", DevStaticFiles(directory="../frontend", html=True), name="static")
