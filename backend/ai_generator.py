@@ -1,5 +1,9 @@
 import anthropic
+import logging
 from typing import List, Optional, Dict, Any
+
+# Set up logging
+logger = logging.getLogger(__name__)
 
 class AIGenerator:
     """Handles interactions with Anthropic's Claude API for generating responses"""
@@ -87,13 +91,23 @@ Provide only the direct answer to what was asked.
         
         # Get response from Claude
         response = self.client.messages.create(**api_params)
-        
+
         # Handle tool execution if needed
         if response.stop_reason == "tool_use" and tool_manager:
             return self._handle_tool_execution(response, api_params, tool_manager)
-        
-        # Return direct response
-        return response.content[0].text
+
+        # Return direct response with error handling
+        if not response.content:
+            logger.error("Received empty response from Claude API")
+            return "Error: Received empty response from Claude API. Please try again."
+
+        # Find the first text block in the response
+        for block in response.content:
+            if getattr(block, 'type', None) == 'text':
+                return block.text
+
+        logger.error(f"No text block found in response content (block types: {[getattr(b, 'type', 'unknown') for b in response.content]})")
+        return "Error: Received response with no text content from Claude API. Please try again."
     
     def _handle_tool_execution(self, initial_response, base_params: Dict[str, Any], tool_manager):
         """
@@ -117,11 +131,19 @@ Provide only the direct answer to what was asked.
         tool_results = []
         for content_block in initial_response.content:
             if content_block.type == "tool_use":
-                tool_result = tool_manager.execute_tool(
-                    content_block.name, 
-                    **content_block.input
-                )
-                
+                try:
+                    tool_result = tool_manager.execute_tool(
+                        content_block.name,
+                        **content_block.input
+                    )
+                    # Ensure tool result is a string
+                    if not isinstance(tool_result, str):
+                        tool_result = str(tool_result)
+                except Exception as e:
+                    # Log the error and provide error result to Claude
+                    logger.error(f"Tool execution failed for '{content_block.name}': {e}", exc_info=True)
+                    tool_result = f"Error executing tool '{content_block.name}': {type(e).__name__}: {str(e)}"
+
                 tool_results.append({
                     "type": "tool_result",
                     "tool_use_id": content_block.id,
@@ -141,4 +163,16 @@ Provide only the direct answer to what was asked.
         
         # Get final response
         final_response = self.client.messages.create(**final_params)
-        return final_response.content[0].text
+
+        # Return final response with error handling
+        if not final_response.content:
+            logger.error("Received empty final response from Claude API after tool execution")
+            return "Error: Received empty final response from Claude API after tool execution. Please try again."
+
+        # Find the first text block in the final response
+        for block in final_response.content:
+            if getattr(block, 'type', None) == 'text':
+                return block.text
+
+        logger.error(f"No text block found in final response content (block types: {[getattr(b, 'type', 'unknown') for b in final_response.content]})")
+        return "Error: Received final response with no text content from Claude API after tool execution. Please try again."

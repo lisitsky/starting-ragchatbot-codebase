@@ -8,10 +8,19 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
 import os
+import logging
+import traceback
 
 from config import config
 from rag_system import RAGSystem
 from models import SourceCitation
+
+# Set up logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 # Initialize FastAPI app
 app = FastAPI(title="Course Materials RAG System", root_path="")
@@ -79,7 +88,16 @@ async def query_documents(request: QueryRequest):
             session_id=session_id
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # Log the full error with traceback
+        logger.error(f"Query processing failed: {traceback.format_exc()}")
+
+        # Provide detailed error message to user
+        error_detail = f"{type(e).__name__}: {str(e)}"
+
+        raise HTTPException(
+            status_code=500,
+            detail=error_detail
+        )
 
 @app.get("/api/courses", response_model=CourseStats)
 async def get_course_stats():

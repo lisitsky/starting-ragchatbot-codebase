@@ -1,6 +1,9 @@
 from typing import Dict, Any, Optional
 from abc import ABC, abstractmethod
+import logging
 from vector_store import VectorStore, SearchResults
+
+logger = logging.getLogger(__name__)
 
 
 class Tool(ABC):
@@ -63,12 +66,16 @@ class CourseSearchTool(Tool):
         """
         
         # Use the vector store's unified search interface
-        results = self.store.search(
-            query=query,
-            course_name=course_name,
-            lesson_number=lesson_number
-        )
-        
+        try:
+            results = self.store.search(
+                query=query,
+                course_name=course_name,
+                lesson_number=lesson_number
+            )
+        except Exception as e:
+            logger.error(f"Search failed: {e}", exc_info=True)
+            return f"Search error: {type(e).__name__}: {str(e)}"
+
         # Handle errors
         if results.error:
             return results.error

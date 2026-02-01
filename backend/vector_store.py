@@ -2,8 +2,12 @@ import chromadb
 from chromadb.config import Settings
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
+import logging
 from models import Course, CourseChunk
 from sentence_transformers import SentenceTransformer
+
+# Set up logging
+logger = logging.getLogger(__name__)
 
 @dataclass
 class SearchResults:
@@ -97,7 +101,9 @@ class VectorStore:
             )
             return SearchResults.from_chroma(results)
         except Exception as e:
-            return SearchResults.empty(f"Search error: {str(e)}")
+            error_msg = f"Search error: {str(e)}"
+            logger.error(f"Vector store search failed: {e}", exc_info=True)
+            return SearchResults.empty(error_msg)
     
     def _resolve_course_name(self, course_name: str) -> Optional[str]:
         """Use vector search to find best matching course by name"""
