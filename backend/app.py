@@ -1,4 +1,5 @@
 import warnings
+
 warnings.filterwarnings("ignore", message="resource_tracker: There appear to be.*")
 
 from fastapi import FastAPI, HTTPException
@@ -17,8 +18,7 @@ from models import SourceCitation
 
 # Set up logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -26,10 +26,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="Course Materials RAG System", root_path="")
 
 # Add trusted host middleware for proxy
-app.add_middleware(
-    TrustedHostMiddleware,
-    allowed_hosts=["*"]
-)
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
 
 # Enable CORS with proper settings for proxy
 app.add_middleware(
@@ -44,24 +41,32 @@ app.add_middleware(
 # Initialize RAG system
 rag_system = RAGSystem(config)
 
+
 # Pydantic models for request/response
 class QueryRequest(BaseModel):
     """Request model for course queries"""
+
     query: str
     session_id: Optional[str] = None
 
+
 class QueryResponse(BaseModel):
     """Response model for course queries"""
+
     answer: str
     sources: List[SourceCitation]
     session_id: str
 
+
 class CourseStats(BaseModel):
     """Response model for course statistics"""
+
     total_courses: int
     course_titles: List[str]
 
+
 # API Endpoints
+
 
 @app.post("/api/query", response_model=QueryResponse)
 async def query_documents(request: QueryRequest):
@@ -77,16 +82,15 @@ async def query_documents(request: QueryRequest):
 
         # Convert source dicts to SourceCitation objects
         source_citations = [
-            SourceCitation(**source) if isinstance(source, dict)
-            else SourceCitation(text=source, url=None)
+            (
+                SourceCitation(**source)
+                if isinstance(source, dict)
+                else SourceCitation(text=source, url=None)
+            )
             for source in sources
         ]
 
-        return QueryResponse(
-            answer=answer,
-            sources=source_citations,
-            session_id=session_id
-        )
+        return QueryResponse(answer=answer, sources=source_citations, session_id=session_id)
     except Exception as e:
         # Log the full error with traceback
         logger.error(f"Query processing failed: {traceback.format_exc()}")
@@ -94,10 +98,8 @@ async def query_documents(request: QueryRequest):
         # Provide detailed error message to user
         error_detail = f"{type(e).__name__}: {str(e)}"
 
-        raise HTTPException(
-            status_code=500,
-            detail=error_detail
-        )
+        raise HTTPException(status_code=500, detail=error_detail)
+
 
 @app.get("/api/courses", response_model=CourseStats)
 async def get_course_stats():
@@ -105,11 +107,11 @@ async def get_course_stats():
     try:
         analytics = rag_system.get_course_analytics()
         return CourseStats(
-            total_courses=analytics["total_courses"],
-            course_titles=analytics["course_titles"]
+            total_courses=analytics["total_courses"], course_titles=analytics["course_titles"]
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.delete("/api/session/{session_id}")
 async def delete_session(session_id: str):
@@ -123,6 +125,7 @@ async def delete_session(session_id: str):
         print(f"Error clearing session {session_id}: {e}")
         return {"status": "success", "message": "Session cleanup attempted"}
 
+
 @app.on_event("startup")
 async def startup_event():
     """Load initial documents on startup"""
@@ -134,6 +137,7 @@ async def startup_event():
             print(f"Loaded {courses} courses with {chunks} chunks")
         except Exception as e:
             print(f"Error loading documents: {e}")
+
 
 # Custom static file handler with no-cache headers for development
 from fastapi.staticfiles import StaticFiles
@@ -151,7 +155,7 @@ class DevStaticFiles(StaticFiles):
             response.headers["Pragma"] = "no-cache"
             response.headers["Expires"] = "0"
         return response
-    
-    
+
+
 # Serve static files for the frontend with no-cache headers for development
 app.mount("/", DevStaticFiles(directory="../frontend", html=True), name="static")

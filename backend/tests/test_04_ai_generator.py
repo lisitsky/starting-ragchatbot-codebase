@@ -20,6 +20,7 @@ class TestAIGeneratorBasic:
     def tool_manager(self):
         """Create tool manager with search tool."""
         from vector_store import VectorStore
+
         mock_vector_store = Mock(spec=VectorStore)
         mock_vector_store.search.return_value = SearchResults.empty("No results")
 
@@ -37,29 +38,29 @@ class TestAIGeneratorBasic:
             generator = AIGenerator(api_key="test-key", model="claude-sonnet-4-20250514")
             return generator
 
-    def test_generate_response_no_tools(self, ai_generator, mock_anthropic_client, mock_anthropic_response_direct):
+    def test_generate_response_no_tools(
+        self, ai_generator, mock_anthropic_client, mock_anthropic_response_direct
+    ):
         """Test basic response generation without tool use."""
         mock_anthropic_client.messages.create.return_value = mock_anthropic_response_direct
 
-        response = ai_generator.generate_response(
-            query="What is 2+2?",
-            conversation_history=""
-        )
+        response = ai_generator.generate_response(query="What is 2+2?", conversation_history="")
 
         assert response is not None
         assert isinstance(response, str)
         assert len(response) > 0
         assert response == "This is a test response."
 
-    def test_generate_response_with_history(self, ai_generator, mock_anthropic_client, mock_anthropic_response_direct):
+    def test_generate_response_with_history(
+        self, ai_generator, mock_anthropic_client, mock_anthropic_response_direct
+    ):
         """Test response generation with conversation history."""
         mock_anthropic_client.messages.create.return_value = mock_anthropic_response_direct
 
         history = "Previous conversation:\nUser: Hello\nAssistant: Hi there!"
 
         response = ai_generator.generate_response(
-            query="How are you?",
-            conversation_history=history
+            query="How are you?", conversation_history=history
         )
 
         assert response is not None
@@ -75,6 +76,7 @@ class TestAIGeneratorToolUse:
     def tool_manager_with_results(self, mock_search_results):
         """Create tool manager that returns search results."""
         from vector_store import VectorStore
+
         mock_vector_store = Mock(spec=VectorStore)
         mock_vector_store.search.return_value = mock_search_results
 
@@ -101,7 +103,7 @@ class TestAIGeneratorToolUse:
         ai_generator_with_tool,
         tool_manager_with_results,
         mock_anthropic_response_tool_use,
-        mock_anthropic_response_direct
+        mock_anthropic_response_direct,
     ):
         """Test two-phase pattern: tool request -> tool execution -> final response."""
         mock_client = ai_generator_with_tool.client
@@ -110,14 +112,14 @@ class TestAIGeneratorToolUse:
         # Second call: Claude provides final answer
         mock_client.messages.create.side_effect = [
             mock_anthropic_response_tool_use,
-            mock_anthropic_response_direct
+            mock_anthropic_response_direct,
         ]
 
         response = ai_generator_with_tool.generate_response(
             query="What is in the test course?",
             conversation_history="",
             tools=tool_manager_with_results.get_tool_definitions(),
-            tool_manager=tool_manager_with_results
+            tool_manager=tool_manager_with_results,
         )
 
         assert response is not None
@@ -133,6 +135,7 @@ class TestAIGeneratorErrorHandling:
     def basic_tool_manager(self):
         """Create basic tool manager."""
         from vector_store import VectorStore
+
         mock_vector_store = Mock(spec=VectorStore)
         mock_vector_store.search.return_value = SearchResults.empty("No results")
 
@@ -142,7 +145,9 @@ class TestAIGeneratorErrorHandling:
 
         return manager
 
-    def test_response_content_missing(self, basic_tool_manager, mock_anthropic_response_empty_content):
+    def test_response_content_missing(
+        self, basic_tool_manager, mock_anthropic_response_empty_content
+    ):
         """
         ERROR CASE: response.content is empty list.
 
@@ -162,13 +167,11 @@ class TestAIGeneratorErrorHandling:
             # This should not raise an exception
             # Instead should return error message or handle gracefully
             try:
-                response = generator.generate_response(
-                    query="Test query",
-                    conversation_history=""
-                )
+                response = generator.generate_response(query="Test query", conversation_history="")
                 # If we get here, error handling was added
-                assert "error" in response.lower() or "empty" in response.lower(), \
-                    "Should return error message for empty content"
+                assert (
+                    "error" in response.lower() or "empty" in response.lower()
+                ), "Should return error message for empty content"
             except IndexError as e:
                 pytest.fail(
                     f"IndexError raised - missing error handling at line 96: {e}\n"
@@ -195,13 +198,11 @@ class TestAIGeneratorErrorHandling:
             generator = AIGenerator(api_key="test-key", model="claude-sonnet-4-20250514")
 
             try:
-                response = generator.generate_response(
-                    query="Test query",
-                    conversation_history=""
-                )
+                response = generator.generate_response(query="Test query", conversation_history="")
                 # If we get here, error handling was added
-                assert "error" in response.lower() or "unexpected" in response.lower(), \
-                    "Should return error message for malformed response"
+                assert (
+                    "error" in response.lower() or "unexpected" in response.lower()
+                ), "Should return error message for malformed response"
             except AttributeError as e:
                 pytest.fail(
                     f"AttributeError raised - missing error handling at lines 96/144: {e}\n"
@@ -239,15 +240,17 @@ class TestAIGeneratorErrorHandling:
             generator = AIGenerator(api_key="test-key", model="claude-sonnet-4-20250514")
 
             # Make tool execution fail
-            with patch.object(basic_tool_manager, 'execute_tool', side_effect=Exception("Tool failed")):
+            with patch.object(
+                basic_tool_manager, "execute_tool", side_effect=Exception("Tool failed")
+            ):
                 try:
                     response = generator.generate_response(
-                        query="Test query",
-                        conversation_history=""
+                        query="Test query", conversation_history=""
                     )
                     # If we get here, error handling was added
-                    assert "error" in response.lower() or "failed" in response.lower(), \
-                        "Should return error message when tool execution fails"
+                    assert (
+                        "error" in response.lower() or "failed" in response.lower()
+                    ), "Should return error message when tool execution fails"
                 except Exception as e:
                     pytest.fail(
                         f"Exception propagated - missing error handling at lines 118-129: {e}\n"
@@ -290,11 +293,12 @@ class TestAIGeneratorErrorHandling:
             generator = AIGenerator(api_key="test-key", model="claude-sonnet-4-20250514")
 
             # Make tool return dict instead of string
-            with patch.object(basic_tool_manager, 'execute_tool', return_value={"error": "not a string"}):
+            with patch.object(
+                basic_tool_manager, "execute_tool", return_value={"error": "not a string"}
+            ):
                 try:
                     response = generator.generate_response(
-                        query="Test query",
-                        conversation_history=""
+                        query="Test query", conversation_history=""
                     )
                     # Should handle non-string result
                     assert response is not None
@@ -317,17 +321,14 @@ class TestAIGeneratorErrorHandling:
             mock_client.messages.create.side_effect = AuthenticationError(
                 "Invalid API key",
                 response=mock_response,
-                body={"error": {"message": "Invalid API key"}}
+                body={"error": {"message": "Invalid API key"}},
             )
             mock_anthropic_class.return_value = mock_client
 
             generator = AIGenerator(api_key="test-key", model="claude-sonnet-4-20250514")
 
             with pytest.raises(AuthenticationError):
-                generator.generate_response(
-                    query="Test query",
-                    conversation_history=""
-                )
+                generator.generate_response(query="Test query", conversation_history="")
 
     def test_api_timeout(self, basic_tool_manager):
         """Test handling of API timeout."""
@@ -341,10 +342,7 @@ class TestAIGeneratorErrorHandling:
             generator = AIGenerator(api_key="test-key", model="claude-sonnet-4-20250514")
 
             with pytest.raises(APITimeoutError):
-                generator.generate_response(
-                    query="Test query",
-                    conversation_history=""
-                )
+                generator.generate_response(query="Test query", conversation_history="")
 
 
 class TestAIGeneratorSequentialToolUse:
@@ -369,13 +367,21 @@ class TestAIGeneratorSequentialToolUse:
             {
                 "name": "search_course_content",
                 "description": "Search course content",
-                "input_schema": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}
+                "input_schema": {
+                    "type": "object",
+                    "properties": {"query": {"type": "string"}},
+                    "required": ["query"],
+                },
             },
             {
                 "name": "get_course_outline",
                 "description": "Get course outline",
-                "input_schema": {"type": "object", "properties": {"course_name": {"type": "string"}}, "required": ["course_name"]}
-            }
+                "input_schema": {
+                    "type": "object",
+                    "properties": {"course_name": {"type": "string"}},
+                    "required": ["course_name"],
+                },
+            },
         ]
         return manager
 
@@ -385,21 +391,21 @@ class TestAIGeneratorSequentialToolUse:
         tool_manager,
         mock_anthropic_response_tool_use,
         mock_anthropic_response_tool_use_outline,
-        mock_anthropic_response_direct
+        mock_anthropic_response_direct,
     ):
         """Happy path: Claude uses two tools across two rounds, then synthesizes."""
         generator, mock_client = ai_generator_with_mock_client
 
         mock_client.messages.create.side_effect = [
-            mock_anthropic_response_tool_use,       # round 1: search
-            mock_anthropic_response_tool_use_outline, # round 2: outline
-            mock_anthropic_response_direct           # synthesis
+            mock_anthropic_response_tool_use,  # round 1: search
+            mock_anthropic_response_tool_use_outline,  # round 2: outline
+            mock_anthropic_response_direct,  # synthesis
         ]
 
         response = generator.generate_response(
             query="Tell me about the test course",
             tools=tool_manager.get_tool_definitions(),
-            tool_manager=tool_manager
+            tool_manager=tool_manager,
         )
 
         # 3 API calls: tool_use -> tool_use -> direct
@@ -418,22 +424,22 @@ class TestAIGeneratorSequentialToolUse:
         tool_manager,
         mock_anthropic_response_tool_use,
         mock_anthropic_response_tool_use_outline,
-        mock_anthropic_response_direct
+        mock_anthropic_response_direct,
     ):
         """Rounds exhausted: loop breaks, forced synthesis call omits tools."""
         generator, mock_client = ai_generator_with_mock_client
 
         # Both rounds return tool_use; post-loop forced synthesis returns text
         mock_client.messages.create.side_effect = [
-            mock_anthropic_response_tool_use,        # round 1
-            mock_anthropic_response_tool_use_outline, # round 2 (hits MAX_TOOL_ROUNDS)
-            mock_anthropic_response_direct            # forced synthesis
+            mock_anthropic_response_tool_use,  # round 1
+            mock_anthropic_response_tool_use_outline,  # round 2 (hits MAX_TOOL_ROUNDS)
+            mock_anthropic_response_direct,  # forced synthesis
         ]
 
         response = generator.generate_response(
             query="Tell me everything",
             tools=tool_manager.get_tool_definitions(),
-            tool_manager=tool_manager
+            tool_manager=tool_manager,
         )
 
         assert mock_client.messages.create.call_count == 3
@@ -448,7 +454,7 @@ class TestAIGeneratorSequentialToolUse:
         ai_generator_with_mock_client,
         tool_manager,
         mock_anthropic_response_tool_use,
-        mock_anthropic_response_direct
+        mock_anthropic_response_direct,
     ):
         """All tools fail in a round: loop breaks early, forced synthesis follows."""
         generator, mock_client = ai_generator_with_mock_client
@@ -457,13 +463,13 @@ class TestAIGeneratorSequentialToolUse:
 
         mock_client.messages.create.side_effect = [
             mock_anthropic_response_tool_use,  # round 1: tool_use (tool will fail)
-            mock_anthropic_response_direct     # forced synthesis
+            mock_anthropic_response_direct,  # forced synthesis
         ]
 
         response = generator.generate_response(
             query="Search for something",
             tools=tool_manager.get_tool_definitions(),
-            tool_manager=tool_manager
+            tool_manager=tool_manager,
         )
 
         # Loop broke after round 1 (all tools failed), then forced synthesis
@@ -479,20 +485,20 @@ class TestAIGeneratorSequentialToolUse:
         ai_generator_with_mock_client,
         tool_manager,
         mock_anthropic_response_tool_use,
-        mock_anthropic_response_direct
+        mock_anthropic_response_direct,
     ):
         """Regression: single tool round followed by direct response works as before."""
         generator, mock_client = ai_generator_with_mock_client
 
         mock_client.messages.create.side_effect = [
-            mock_anthropic_response_tool_use,   # round 1: tool_use
-            mock_anthropic_response_direct      # Claude synthesizes directly (no more tools)
+            mock_anthropic_response_tool_use,  # round 1: tool_use
+            mock_anthropic_response_direct,  # Claude synthesizes directly (no more tools)
         ]
 
         response = generator.generate_response(
             query="What is in the test course?",
             tools=tool_manager.get_tool_definitions(),
-            tool_manager=tool_manager
+            tool_manager=tool_manager,
         )
 
         assert mock_client.messages.create.call_count == 2
