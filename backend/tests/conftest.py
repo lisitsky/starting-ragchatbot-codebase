@@ -233,9 +233,60 @@ def mock_anthropic_client(mock_anthropic_response_direct):
 
 
 @pytest.fixture
-def api_client():
-    """FastAPI test client."""
-    from fastapi.testclient import TestClient
-    from app import app
+def mock_rag_system():
+    """Mock RAGSystem with pre-configured query and analytics responses.
 
-    return TestClient(app)
+    Provides default return values that can be overridden per-test by
+    reassigning attributes on the fixture instance.
+    """
+    mock_system = MagicMock()
+
+    # Default query response: answer + two sources (dict format)
+    mock_system.query.return_value = (
+        "This is a mock answer about the course content.",
+        [
+            {"text": "Test Course - Lesson 0", "url": "https://example.com/lesson/0"},
+            {"text": "Test Course - Lesson 1", "url": None},
+        ],
+    )
+
+    # Default course analytics
+    mock_system.get_course_analytics.return_value = {
+        "total_courses": 2,
+        "course_titles": ["Test Course", "Advanced Course"],
+    }
+
+    # Session manager stubs
+    mock_system.session_manager.create_session.return_value = "session_test_1"
+
+    return mock_system
+
+
+@pytest.fixture
+def api_client(mock_rag_system):
+    """FastAPI test client with the RAG system replaced by mock_rag_system.
+
+    app.py mounts static files at "../frontend" relative to CWD, so the
+    fixture switches into backend/ before importing the module — matching how
+    the app runs normally.  Swaps app.rag_system so the startup event's
+    add_course_folder call hits the mock (no-op) instead of touching ChromaDB
+    or the filesystem.  Both are restored in the teardown.
+    """
+    import os
+    from fastapi.testclient import TestClient
+
+    backend_dir = str(Path(__file__).parent.parent)
+    original_cwd = os.getcwd()
+    os.chdir(backend_dir)
+
+    import app as app_module
+
+    original = app_module.rag_system
+    app_module.rag_system = mock_rag_system
+
+    try:
+        with TestClient(app_module.app) as client:
+            yield client
+    finally:
+        app_module.rag_system = original
+        os.chdir(original_cwd)
