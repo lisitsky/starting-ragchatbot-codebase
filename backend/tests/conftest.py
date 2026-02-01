@@ -92,6 +92,29 @@ def mock_anthropic_response_tool_use():
 
 
 @pytest.fixture
+def mock_anthropic_response_tool_use_outline():
+    """Mock response requesting get_course_outline (for two-round tests)."""
+    mock_response = Mock(spec=Message)
+    mock_response.id = "msg_outline_1"
+    mock_response.model = "claude-sonnet-4-20250514"
+    mock_response.role = "assistant"
+    mock_response.stop_reason = "tool_use"
+
+    tool_block = Mock(spec=ToolUseBlock)
+    tool_block.type = "tool_use"
+    tool_block.id = "toolu_outline_1"
+    tool_block.name = "get_course_outline"
+    tool_block.input = {"course_name": "Test Course"}
+
+    mock_response.content = [tool_block]
+    mock_response.usage = Mock(spec=Usage)
+    mock_response.usage.input_tokens = 160
+    mock_response.usage.output_tokens = 80
+
+    return mock_response
+
+
+@pytest.fixture
 def mock_anthropic_response_empty_content():
     """Mock Anthropic response with empty content list (error case)."""
     mock_response = Mock(spec=Message)

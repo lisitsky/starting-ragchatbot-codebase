@@ -8,7 +8,7 @@ Critical tests target identified error handling gaps at lines 96, 120, 144.
 import pytest
 from unittest.mock import Mock, MagicMock, patch
 from anthropic.types import Message, TextBlock, ToolUseBlock
-from ai_generator import AIGenerator
+from ai_generator import AIGenerator, MAX_TOOL_ROUNDS
 from search_tools import ToolManager, CourseSearchTool
 from vector_store import SearchResults
 
@@ -345,3 +345,156 @@ class TestAIGeneratorErrorHandling:
                     query="Test query",
                     conversation_history=""
                 )
+
+
+class TestAIGeneratorSequentialToolUse:
+    """Test sequential (multi-round) tool calling behaviour."""
+
+    @pytest.fixture
+    def ai_generator_with_mock_client(self):
+        """Create AI generator and expose the mocked client."""
+        with patch("anthropic.Anthropic") as mock_anthropic_class:
+            mock_client = MagicMock()
+            mock_anthropic_class.return_value = mock_client
+            generator = AIGenerator(api_key="test-key", model="claude-sonnet-4-20250514")
+            generator.client = mock_client
+            return generator, mock_client
+
+    @pytest.fixture
+    def tool_manager(self):
+        """Create a tool manager whose execute_tool can be patched per-test."""
+        manager = MagicMock(spec=ToolManager)
+        manager.execute_tool.return_value = "mock tool result"
+        manager.get_tool_definitions.return_value = [
+            {
+                "name": "search_course_content",
+                "description": "Search course content",
+                "input_schema": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}
+            },
+            {
+                "name": "get_course_outline",
+                "description": "Get course outline",
+                "input_schema": {"type": "object", "properties": {"course_name": {"type": "string"}}, "required": ["course_name"]}
+            }
+        ]
+        return manager
+
+    def test_two_sequential_tool_rounds(
+        self,
+        ai_generator_with_mock_client,
+        tool_manager,
+        mock_anthropic_response_tool_use,
+        mock_anthropic_response_tool_use_outline,
+        mock_anthropic_response_direct
+    ):
+        """Happy path: Claude uses two tools across two rounds, then synthesizes."""
+        generator, mock_client = ai_generator_with_mock_client
+
+        mock_client.messages.create.side_effect = [
+            mock_anthropic_response_tool_use,       # round 1: search
+            mock_anthropic_response_tool_use_outline, # round 2: outline
+            mock_anthropic_response_direct           # synthesis
+        ]
+
+        response = generator.generate_response(
+            query="Tell me about the test course",
+            tools=tool_manager.get_tool_definitions(),
+            tool_manager=tool_manager
+        )
+
+        # 3 API calls: tool_use -> tool_use -> direct
+        assert mock_client.messages.create.call_count == 3
+        # execute_tool called once per round
+        assert tool_manager.execute_tool.call_count == 2
+        # Response is the final synthesized text
+        assert response == "This is a test response."
+        # Second API call still included tools (tools persist through the loop)
+        second_call_kwargs = mock_client.messages.create.call_args_list[1].kwargs
+        assert "tools" in second_call_kwargs
+
+    def test_max_rounds_forces_synthesis_without_tools(
+        self,
+        ai_generator_with_mock_client,
+        tool_manager,
+        mock_anthropic_response_tool_use,
+        mock_anthropic_response_tool_use_outline,
+        mock_anthropic_response_direct
+    ):
+        """Rounds exhausted: loop breaks, forced synthesis call omits tools."""
+        generator, mock_client = ai_generator_with_mock_client
+
+        # Both rounds return tool_use; post-loop forced synthesis returns text
+        mock_client.messages.create.side_effect = [
+            mock_anthropic_response_tool_use,        # round 1
+            mock_anthropic_response_tool_use_outline, # round 2 (hits MAX_TOOL_ROUNDS)
+            mock_anthropic_response_direct            # forced synthesis
+        ]
+
+        response = generator.generate_response(
+            query="Tell me everything",
+            tools=tool_manager.get_tool_definitions(),
+            tool_manager=tool_manager
+        )
+
+        assert mock_client.messages.create.call_count == 3
+        assert response == "This is a test response."
+        # Third (forced synthesis) call must NOT include tools
+        third_call_kwargs = mock_client.messages.create.call_args_list[2].kwargs
+        assert "tools" not in third_call_kwargs
+        assert "tool_choice" not in third_call_kwargs
+
+    def test_tool_failure_terminates_loop(
+        self,
+        ai_generator_with_mock_client,
+        tool_manager,
+        mock_anthropic_response_tool_use,
+        mock_anthropic_response_direct
+    ):
+        """All tools fail in a round: loop breaks early, forced synthesis follows."""
+        generator, mock_client = ai_generator_with_mock_client
+
+        tool_manager.execute_tool.side_effect = Exception("Tool failed")
+
+        mock_client.messages.create.side_effect = [
+            mock_anthropic_response_tool_use,  # round 1: tool_use (tool will fail)
+            mock_anthropic_response_direct     # forced synthesis
+        ]
+
+        response = generator.generate_response(
+            query="Search for something",
+            tools=tool_manager.get_tool_definitions(),
+            tool_manager=tool_manager
+        )
+
+        # Loop broke after round 1 (all tools failed), then forced synthesis
+        assert mock_client.messages.create.call_count == 2
+        # Forced synthesis call must NOT include tools
+        second_call_kwargs = mock_client.messages.create.call_args_list[1].kwargs
+        assert "tools" not in second_call_kwargs
+        # Response still returned successfully
+        assert response == "This is a test response."
+
+    def test_single_round_unchanged(
+        self,
+        ai_generator_with_mock_client,
+        tool_manager,
+        mock_anthropic_response_tool_use,
+        mock_anthropic_response_direct
+    ):
+        """Regression: single tool round followed by direct response works as before."""
+        generator, mock_client = ai_generator_with_mock_client
+
+        mock_client.messages.create.side_effect = [
+            mock_anthropic_response_tool_use,   # round 1: tool_use
+            mock_anthropic_response_direct      # Claude synthesizes directly (no more tools)
+        ]
+
+        response = generator.generate_response(
+            query="What is in the test course?",
+            tools=tool_manager.get_tool_definitions(),
+            tool_manager=tool_manager
+        )
+
+        assert mock_client.messages.create.call_count == 2
+        assert tool_manager.execute_tool.call_count == 1
+        assert response == "This is a test response."
