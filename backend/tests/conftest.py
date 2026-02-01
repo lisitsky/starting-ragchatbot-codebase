@@ -17,21 +17,13 @@ def sample_course():
         instructor="Test Instructor",
         lessons=[
             Lesson(
-                lesson_number=0,
-                title="Introduction",
-                lesson_link="https://example.com/lesson/0"
+                lesson_number=0, title="Introduction", lesson_link="https://example.com/lesson/0"
             ),
+            Lesson(lesson_number=1, title="Advanced Topics", lesson_link=None),
             Lesson(
-                lesson_number=1,
-                title="Advanced Topics",
-                lesson_link=None
+                lesson_number=2, title="Best Practices", lesson_link="https://example.com/lesson/2"
             ),
-            Lesson(
-                lesson_number=2,
-                title="Best Practices",
-                lesson_link="https://example.com/lesson/2"
-            )
-        ]
+        ],
     )
 
 
@@ -77,11 +69,7 @@ def mock_anthropic_response_tool_use():
     tool_block.type = "tool_use"
     tool_block.id = "toolu_789"
     tool_block.name = "search_course_content"
-    tool_block.input = {
-        "query": "test query",
-        "course_name": None,
-        "lesson_number": None
-    }
+    tool_block.input = {"query": "test query", "course_name": None, "lesson_number": None}
 
     mock_response.content = [tool_block]
     mock_response.usage = Mock(spec=Usage)
@@ -158,13 +146,13 @@ def mock_search_results():
     return SearchResults(
         documents=[
             "This is lesson 0 content about the basics of testing.",
-            "This is lesson 1 content covering advanced testing strategies."
+            "This is lesson 1 content covering advanced testing strategies.",
         ],
         metadata=[
             {"course_title": "Test Course", "lesson_number": 0, "chunk_index": 0},
-            {"course_title": "Test Course", "lesson_number": 1, "chunk_index": 0}
+            {"course_title": "Test Course", "lesson_number": 1, "chunk_index": 0},
         ],
-        distances=[0.2, 0.3]
+        distances=[0.2, 0.3],
     )
 
 
@@ -185,7 +173,7 @@ def mock_chromadb_client():
     mock_catalog.query.return_value = {
         "ids": [["test_course"]],
         "distances": [[0.1]],
-        "metadatas": [[{"title": "Test Course"}]]
+        "metadatas": [[{"title": "Test Course"}]],
     }
 
     # Mock course_content collection
@@ -197,15 +185,15 @@ def mock_chromadb_client():
         "documents": [
             [
                 "This is lesson 0 content about the basics of testing.",
-                "This is lesson 1 content covering advanced testing strategies."
+                "This is lesson 1 content covering advanced testing strategies.",
             ]
         ],
         "metadatas": [
             [
                 {"course_title": "Test Course", "lesson_number": 0, "chunk_index": 0},
-                {"course_title": "Test Course", "lesson_number": 1, "chunk_index": 0}
+                {"course_title": "Test Course", "lesson_number": 1, "chunk_index": 0},
             ]
-        ]
+        ],
     }
 
     # Mock get_or_create_collection

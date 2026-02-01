@@ -18,6 +18,7 @@ class TestEnvironmentSetup:
     def test_anthropic_api_key_exists(self):
         """Verify ANTHROPIC_API_KEY is set in environment."""
         from config import config
+
         api_key = config.ANTHROPIC_API_KEY
         assert api_key is not None, "ANTHROPIC_API_KEY not found in config"
         assert len(api_key) > 0, "ANTHROPIC_API_KEY is empty"
@@ -26,6 +27,7 @@ class TestEnvironmentSetup:
     def test_anthropic_api_key_valid(self):
         """Test that API key works with a simple API call."""
         from config import config
+
         api_key = config.ANTHROPIC_API_KEY
         if not api_key:
             pytest.skip("ANTHROPIC_API_KEY not set")
@@ -35,7 +37,7 @@ class TestEnvironmentSetup:
             response = client.messages.create(
                 model=config.ANTHROPIC_MODEL,
                 max_tokens=10,
-                messages=[{"role": "user", "content": "Hi"}]
+                messages=[{"role": "user", "content": "Hi"}],
             )
             assert response.content, "API returned empty response"
         except Exception as e:
@@ -111,6 +113,7 @@ class TestEnvironmentSetup:
         """Verify embedding model can be loaded."""
         try:
             from sentence_transformers import SentenceTransformer
+
             model = SentenceTransformer("all-MiniLM-L6-v2")
             assert model is not None, "Failed to load embedding model"
 
@@ -179,5 +182,6 @@ class TestConfiguration:
         expected_path = Path(__file__).parent.parent / "chroma_db"
 
         # Check if paths match (resolve to absolute for comparison)
-        assert config_path.resolve() == expected_path.resolve(), \
-            f"CHROMA_PATH mismatch: config={config_path}, expected={expected_path}"
+        assert (
+            config_path.resolve() == expected_path.resolve()
+        ), f"CHROMA_PATH mismatch: config={config_path}, expected={expected_path}"

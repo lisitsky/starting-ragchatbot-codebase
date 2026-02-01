@@ -7,9 +7,10 @@ logger = logging.getLogger(__name__)
 
 MAX_TOOL_ROUNDS = 2
 
+
 class AIGenerator:
     """Handles interactions with Anthropic's Claude API for generating responses"""
-    
+
     # Static system prompt to avoid rebuilding on each call
     SYSTEM_PROMPT = """ You are an AI assistant specialized in course materials and educational content with access to tools for searching course information and retrieving course outlines.
 
@@ -43,22 +44,21 @@ All responses must be:
 4. **Example-supported** - Include relevant examples when they aid understanding
 Provide only the direct answer to what was asked.
 """
-    
+
     def __init__(self, api_key: str, model: str):
         self.client = anthropic.Anthropic(api_key=api_key)
         self.model = model
-        
+
         # Pre-build base API parameters
-        self.base_params = {
-            "model": self.model,
-            "temperature": 0,
-            "max_tokens": 800
-        }
-    
-    def generate_response(self, query: str,
-                         conversation_history: Optional[str] = None,
-                         tools: Optional[List] = None,
-                         tool_manager=None) -> str:
+        self.base_params = {"model": self.model, "temperature": 0, "max_tokens": 800}
+
+    def generate_response(
+        self,
+        query: str,
+        conversation_history: Optional[str] = None,
+        tools: Optional[List] = None,
+        tool_manager=None,
+    ) -> str:
         """
         Generate AI response with optional sequential tool usage and conversation context.
 
@@ -90,7 +90,7 @@ Provide only the direct answer to what was asked.
         api_params = {
             **self.base_params,
             "messages": [{"role": "user", "content": query}],
-            "system": system_content
+            "system": system_content,
         }
 
         # Add tools if available
@@ -119,22 +119,25 @@ Provide only the direct answer to what was asked.
                 if content_block.type == "tool_use":
                     try:
                         tool_result = tool_manager.execute_tool(
-                            content_block.name,
-                            **content_block.input
+                            content_block.name, **content_block.input
                         )
                         # Ensure tool result is a string
                         if not isinstance(tool_result, str):
                             tool_result = str(tool_result)
                         any_tool_succeeded = True
                     except Exception as e:
-                        logger.error(f"Tool execution failed for '{content_block.name}': {e}", exc_info=True)
+                        logger.error(
+                            f"Tool execution failed for '{content_block.name}': {e}", exc_info=True
+                        )
                         tool_result = f"Error executing tool '{content_block.name}': {type(e).__name__}: {str(e)}"
 
-                    tool_results.append({
-                        "type": "tool_result",
-                        "tool_use_id": content_block.id,
-                        "content": tool_result
-                    })
+                    tool_results.append(
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": content_block.id,
+                            "content": tool_result,
+                        }
+                    )
 
             # Append tool results as user message
             api_params["messages"].append({"role": "user", "content": tool_results})
@@ -153,7 +156,7 @@ Provide only the direct answer to what was asked.
             final_params = {
                 **self.base_params,
                 "messages": api_params["messages"],
-                "system": system_content
+                "system": system_content,
             }
             response = self.client.messages.create(**final_params)
 
@@ -163,8 +166,10 @@ Provide only the direct answer to what was asked.
             return "Error: Received empty response from Claude API. Please try again."
 
         for block in response.content:
-            if getattr(block, 'type', None) == 'text':
+            if getattr(block, "type", None) == "text":
                 return block.text
 
-        logger.error(f"No text block found in response content (block types: {[getattr(b, 'type', 'unknown') for b in response.content]})")
+        logger.error(
+            f"No text block found in response content (block types: {[getattr(b, 'type', 'unknown') for b in response.content]})"
+        )
         return "Error: Received response with no text content from Claude API. Please try again."

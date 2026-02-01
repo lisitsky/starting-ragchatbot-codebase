@@ -42,8 +42,9 @@ class TestAIGeneratorErrorInjection:
 
             # Should NOT raise exception
             result = generator.generate_response("test", [])
-            assert "error" in result.lower() or "empty" in result.lower(), \
-                "Should return error message, not crash"
+            assert (
+                "error" in result.lower() or "empty" in result.lower()
+            ), "Should return error message, not crash"
 
     def test_ai_generator_no_text_attribute(self):
         """Inject content block without .text attribute."""
@@ -76,8 +77,9 @@ class TestAIGeneratorErrorInjection:
 
             # Should NOT raise AttributeError
             result = generator.generate_response("test", [])
-            assert "error" in result.lower() or "unexpected" in result.lower(), \
-                "Should handle missing .text gracefully"
+            assert (
+                "error" in result.lower() or "unexpected" in result.lower()
+            ), "Should handle missing .text gracefully"
 
     def test_ai_generator_tool_execution_raises(self):
         """Make tool execution raise exception."""
@@ -157,7 +159,7 @@ class TestCourseSearchErrorInjection:
         bad_results = SearchResults(
             documents=["Test content"],
             metadata=[{"course_title": "unknown", "lesson_number": -1}],  # Missing metadata
-            distances=[0.5]
+            distances=[0.5],
         )
         mock_vector_store.search.return_value = bad_results
 
@@ -178,7 +180,7 @@ class TestCourseSearchErrorInjection:
         # Mock _resolve_course_name to return None
         tool = CourseSearchTool(mock_vector_store)
 
-        with patch.object(tool.store, 'search', return_value=SearchResults.empty("No results")):
+        with patch.object(tool.store, "search", return_value=SearchResults.empty("No results")):
             result = tool.execute(query="test", course_name="NonexistentCourse", lesson_number=None)
             # Should handle gracefully
             assert isinstance(result, str)
@@ -193,11 +195,15 @@ class TestVectorStoreErrorInjection:
 
         # Create client with temporary directory
         import tempfile
+
         with tempfile.TemporaryDirectory() as tmpdir:
             # VectorStore should create collections if they don't exist
             try:
                 from config import config as cfg
-                store = VectorStore(chroma_path=tmpdir, embedding_model=cfg.EMBEDDING_MODEL, max_results=5)
+
+                store = VectorStore(
+                    chroma_path=tmpdir, embedding_model=cfg.EMBEDDING_MODEL, max_results=5
+                )
                 assert store is not None
             except Exception as e:
                 pytest.fail(f"VectorStore should handle missing collections: {e}")
@@ -208,9 +214,13 @@ class TestVectorStoreErrorInjection:
         import chromadb
 
         import tempfile
+
         with tempfile.TemporaryDirectory() as tmpdir:
             from config import config as cfg
-            store = VectorStore(chroma_path=tmpdir, embedding_model=cfg.EMBEDDING_MODEL, max_results=5)
+
+            store = VectorStore(
+                chroma_path=tmpdir, embedding_model=cfg.EMBEDDING_MODEL, max_results=5
+            )
 
             # Search empty database
             results = store.search(query="test", limit=5)
@@ -298,7 +308,7 @@ class TestEndpointErrorInjection:
         auth_error = AuthenticationError(
             "Invalid API key",
             response=mock_response,
-            body={"error": {"message": "Invalid API key"}}
+            body={"error": {"message": "Invalid API key"}},
         )
 
         mock_rag_system.query.side_effect = auth_error
