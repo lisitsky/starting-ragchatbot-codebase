@@ -247,9 +247,13 @@ class TestRAGSystemErrorInjection:
 
 
 class TestEndpointErrorInjection:
-    """Test that errors are properly surfaced through the API endpoint."""
+    """Test that errors are properly surfaced through the API endpoint.
 
-    def test_endpoint_all_exceptions_masked(self):
+    Uses the shared api_client / mock_rag_system fixtures so that app import
+    and static-file mounting are handled consistently regardless of CWD.
+    """
+
+    def test_endpoint_all_exceptions_masked(self, api_client, mock_rag_system):
         """
         Verify that endpoint returns specific error details in HTTP 500.
 
@@ -258,61 +262,36 @@ class TestEndpointErrorInjection:
 
         Should now include the exception type name, not just the message.
         """
-        from fastapi.testclient import TestClient
-        from app import app
+        mock_rag_system.query.side_effect = ValueError("Specific error message")
 
-        client = TestClient(app)
+        response = api_client.post(
+            "/api/query",
+            json={"query": "test", "session_id": None}
+        )
 
-        # Mock RAG system to raise specific exception
-        from rag_system import RAGSystem
+        assert response.status_code == 500
+        detail = response.json()["detail"]
+        assert "ValueError" in detail, f"Error detail should include exception type, got: {detail}"
+        assert "Specific error message" in detail, f"Error detail should include message, got: {detail}"
 
-        with patch.object(RAGSystem, 'query', side_effect=ValueError("Specific error message")):
-            response = client.post(
-                "/api/query",
-                json={"query": "test", "session_id": None}
-            )
-
-            assert response.status_code == 500
-            detail = response.json()["detail"]
-            # After fix: detail includes exception type name
-            assert "ValueError" in detail, f"Error detail should include exception type, got: {detail}"
-            assert "Specific error message" in detail, f"Error detail should include message, got: {detail}"
-
-    def test_endpoint_chromadb_error(self):
+    def test_endpoint_chromadb_error(self, api_client, mock_rag_system):
         """Test endpoint response when ChromaDB fails."""
-        from fastapi.testclient import TestClient
-        from app import app
+        mock_rag_system.query.side_effect = Exception("ChromaDB connection error")
 
-        client = TestClient(app)
+        response = api_client.post(
+            "/api/query",
+            json={"query": "What is MCP?", "session_id": None}
+        )
 
-        # Mock RAG system to raise ChromaDB-style error
-        from rag_system import RAGSystem
+        assert response.status_code == 500
+        detail = response.json()["detail"]
+        assert "Exception" in detail, f"Error detail should include exception type, got: {detail}"
+        assert "ChromaDB connection error" in detail, f"Error detail should include message, got: {detail}"
 
-        with patch.object(RAGSystem, 'query', side_effect=Exception("ChromaDB connection error")):
-            response = client.post(
-                "/api/query",
-                json={"query": "What is MCP?", "session_id": None}
-            )
-
-            # Should return 500 with specific error detail
-            assert response.status_code == 500
-            detail = response.json()["detail"]
-            # After fix: detail includes exception type and message
-            assert "Exception" in detail, f"Error detail should include exception type, got: {detail}"
-            assert "ChromaDB connection error" in detail, f"Error detail should include message, got: {detail}"
-
-    def test_endpoint_api_key_error(self):
+    def test_endpoint_api_key_error(self, api_client, mock_rag_system):
         """Test endpoint response when Anthropic API key is invalid."""
-        from fastapi.testclient import TestClient
-        from app import app
         from anthropic import AuthenticationError
 
-        client = TestClient(app)
-
-        # Mock AI generator to raise auth error
-        from ai_generator import AIGenerator
-
-        # AuthenticationError requires response and body kwargs
         mock_response = Mock()
         mock_response.status_code = 401
         mock_response.headers = {}
@@ -322,14 +301,14 @@ class TestEndpointErrorInjection:
             body={"error": {"message": "Invalid API key"}}
         )
 
-        with patch.object(AIGenerator, 'generate_response', side_effect=auth_error):
-            response = client.post(
-                "/api/query",
-                json={"query": "test", "session_id": None}
-            )
+        mock_rag_system.query.side_effect = auth_error
 
-            assert response.status_code == 500
-            detail = response.json()["detail"]
-            # After fix, detail should include error type name
-            assert "AuthenticationError" in detail
-            assert "Invalid API key" in detail
+        response = api_client.post(
+            "/api/query",
+            json={"query": "test", "session_id": None}
+        )
+
+        assert response.status_code == 500
+        detail = response.json()["detail"]
+        assert "AuthenticationError" in detail
+        assert "Invalid API key" in detail
